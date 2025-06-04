@@ -4,9 +4,9 @@ import './App.css'
 
 // Konfigurasi SIP (pindahkan ke sini atau ke file konfigurasi)
 const sipConfig = {
-  uri: 'sip:1001@10.3.132.69',
+  uri: 'sip:1001@10.3.132.71',
   password: '21619283efe1a13cc2a93f4d3445a173',
-  sockets: [new JsSIP.WebSocketInterface('wss://10.3.132.69:8089/ws')],
+  sockets: [new JsSIP.WebSocketInterface('ws://10.3.132.71:8088/ws')],
   realm: 'asterisk',
   register: true,
   session_timers: false,
@@ -1370,7 +1370,7 @@ function App() {
                 <h3>SIP Settings</h3>
                 <p>Status: {sipStatusText}</p>
                 <p>Extension: 1001</p>
-                <p>Server: 10.3.132.69:8089</p>
+                <p>Server: 10.3.132.71:8088</p>
               </div>
             </div>
           )}

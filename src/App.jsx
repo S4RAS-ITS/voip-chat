@@ -6,7 +6,12 @@ import './App.css'
 const sipConfig = {
   uri: 'sip:1001@10.3.132.71',
   password: '21619283efe1a13cc2a93f4d3445a173',
-  sockets: [new JsSIP.WebSocketInterface('ws://10.3.132.71:8088/ws')],
+  // Auto detect: WSS untuk production HTTPS, WS untuk localhost
+  sockets: [new JsSIP.WebSocketInterface(
+    window.location.protocol === 'https:' 
+      ? 'wss://10.3.132.71:8089/ws'  // Production (Netlify)
+      : 'ws://10.3.132.71:8088/ws'   // Development (localhost)
+  )],
   realm: 'asterisk',
   register: true,
   session_timers: false,
@@ -1370,7 +1375,7 @@ function App() {
                 <h3>SIP Settings</h3>
                 <p>Status: {sipStatusText}</p>
                 <p>Extension: 1001</p>
-                <p>Server: 10.3.132.71:8088</p>
+                <p>Server: 10.3.132.71:8089 (WSS)</p>
               </div>
             </div>
           )}

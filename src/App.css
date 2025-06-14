@@ -579,9 +579,6 @@ body {
 }
 
 /* Contacts View */
-.contacts-view {
-  max-width: 800px;
-}
 
 .contacts-list {
   display: grid;
@@ -757,9 +754,6 @@ body {
 }
 
 /* Settings View */
-.settings-view {
-  max-width: 600px;
-}
 
 .settings-card {
   background-color: var(--card-bg);

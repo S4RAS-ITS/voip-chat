@@ -1,6 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom';
+import { IoLogOut } from "react-icons/io5";
 import * as JsSIP from 'jssip'
 import './App.css'
+
+import useAuth from './hooks/useAuth';
+import LoadingComponent from './components/Loading';
+import { useUserInfoStore, useUserVoipStore } from './store/useStore';
+import { getAsteriskUserList } from './utils/callAsteriskBackend';
 
 // Konfigurasi SIP (pindahkan ke sini atau ke file konfigurasi)
 const sipConfig = {
@@ -224,7 +231,7 @@ const QuickContacts = ({ contacts, onCall, onChat }) => (
         </div>
         <div className="contact-info">
           <div className="contact-name">{contact.name}</div>
-          <div className="contact-number">+1 (555) 987-6543</div>
+          <div className="contact-number">{contact.id}</div>
         </div>
         <button 
           onClick={() => onCall(contact.id.toString())} 
@@ -236,6 +243,13 @@ const QuickContacts = ({ contacts, onCall, onChat }) => (
     ))}
   </div>
 );
+
+const initContacts = [
+    { id: '1001', name: 'User 1001 (Old WebRTC)', status: 'Offline' },
+    { id: '1002', name: 'User 1002 (Linphone)', status: 'Online' },
+    { id: '1003', name: 'User 1003 (Support)', status: 'Offline' },
+    { id: '1005', name: 'Jane Smith (Tech)', status: 'Sibuk' },
+  ];
 
 function App() {
   const [ua, setUa] = useState(null);
@@ -258,6 +272,29 @@ function App() {
   const [chatPartner, setChatPartner] = useState(null);
   const [messageQueue, setMessageQueue] = useState([]);
   const chatMessagesEndRef = useRef(null);
+
+  const [contacts, setContacts] = useState(initContacts);
+
+  const [isLogin] = useAuth();
+  const {userInfo} = useUserInfoStore();
+  const {userVoip} = useUserVoipStore();
+
+  const [showLogout, setShowLogout] = useState(false);
+  const logoutRef = useRef(null);
+
+  useEffect(() => {
+    getAsteriskUserList().then((datas) => {
+      const userList = datas.filter((data) => data.resource != userVoip).map((data) => {
+        return {
+          id: data.resource,
+          name: `User ${data.resource}`,
+          status: data.state
+        }
+      });
+
+      setContacts(userList)
+    })
+  }, [])
 
   // Call history tracking
   const [callHistory, setCallHistory] = useState([
@@ -349,6 +386,7 @@ function App() {
       name: contact.name,
       uri: partnerUri
     });
+    setActiveView('chat');
     // Clear previous messages when switching chat partner (optional)
     // setChatMessages([]);
   };
@@ -485,6 +523,7 @@ function App() {
         //   confirmed: (e) => { console.log('Outgoing call confirmed.'); }
         // }
       };
+      setActiveView('dashboard');
       try {
         // The 'newRTCSession' event on the UA will handle setting this new session
         // as the currentSession for outgoing calls.
@@ -670,13 +709,6 @@ function App() {
     }
     setChatInput('');
   };
-
-  const contacts = [
-    { id: '1001', name: 'User 1001 (Old WebRTC)', status: 'Offline' },
-    { id: '1002', name: 'User 1002 (Linphone)', status: 'Online' },
-    { id: '1003', name: 'User 1003 (Support)', status: 'Offline' },
-    { id: '1005', name: 'Jane Smith (Tech)', status: 'Sibuk' },
-  ];
 
   const showActiveCallUI = currentSession && (currentSession.isInProgress() || currentSession.isEstablished()) && !currentSession.isEnded();
   const showIncomingCallUI = incomingCall && !incomingCall.isEnded() && !showActiveCallUI;
@@ -1080,6 +1112,32 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleClickOutside = event => {
+    if (logoutRef.current && !logoutRef.current.contains(event.target)) {
+      setShowLogout(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showLogout) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showLogout]);
+
+  function redirectLogout() {
+    window.location.href = 'https://portal-saras.com/logout';
+  }
+
+  if (!isLogin) {
+    return (<LoadingComponent/>);
+  }
+
   return (
     <div className="voip-app">
       {/* Sidebar */}
@@ -1151,10 +1209,20 @@ function App() {
       <div className="main-container">
         <header className="main-header">
           <h1>{activeView.charAt(0).toUpperCase() + activeView.slice(1)}</h1>
-          <div className="user-profile">
+          <div className="user-profile relative hover:cursor-pointer" onClick={() => setShowLogout(prev => !prev)}>
             <span className="notification-badge">2</span>
-            <div className="user-avatar">JD</div>
-            <span className="user-name">John Doe</span>
+            <div className="user-avatar">{ `${userInfo?.given_name.charAt(0).toUpperCase()}${userInfo?.family_name.charAt(0).toUpperCase()}` }</div>
+            <span className="user-name">{ `${userInfo?.given_name} ${userInfo?.family_name}` }</span>
+            {
+              showLogout && (
+                <div ref={logoutRef} className='z-50 logout-div absolute right-0 top-12 flex w-32 h-12 rounded-xl'>
+                  <div onClick={redirectLogout} className='flex flex-row gap-2 w-full justify-center items-center rounded-xl bg-red-500/80 hover:bg-red-400 hover:cursor-pointer'>
+                    <IoLogOut className='size-6 text-white' />
+                    <p className='text-white font-bold text-sm text-nowrap w-fit'>Log Out</p>
+                  </div>
+                </div>
+              )
+            }
           </div>
         </header>
 
@@ -1182,11 +1250,14 @@ function App() {
                   <RecentActivity callHistory={callHistory} />
                 </div>
                 <div className="dashboard-right">
-                  <QuickContacts 
-                    contacts={contacts}
-                    onCall={handleCall}
-                    onChat={handleSelectChatPartner}
-                  />
+                  {
+                    contacts[0] &&
+                    <QuickContacts 
+                      contacts={contacts}
+                      onCall={handleCall}
+                      onChat={handleSelectChatPartner}
+                    />
+                  }
                 </div>
               </div>
             </div>
@@ -1374,7 +1445,7 @@ function App() {
               <div className="settings-card">
                 <h3>SIP Settings</h3>
                 <p>Status: {sipStatusText}</p>
-                <p>Extension: 1001</p>
+                <p>Extension: { userVoip }</p>
                 <p>Server: 10.3.132.71:8089 (WSS)</p>
               </div>
             </div>

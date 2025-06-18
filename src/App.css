@@ -641,7 +641,7 @@ body {
 
 /* Chat View */
 .chat-view {
-  max-width: 800px;
+  min-width: 300px;
   height: calc(100vh - 140px);
 }
 

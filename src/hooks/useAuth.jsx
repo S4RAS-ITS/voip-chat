@@ -16,7 +16,7 @@ const useAuth = () => {
     const client = new Keycloak({
       url: 'https://keycloak.portal-saras.com',
       realm: 'S4RAS',
-      clientId: 'voip',
+      clientId: 'front-end',
     });
 
     isRun.current = true;

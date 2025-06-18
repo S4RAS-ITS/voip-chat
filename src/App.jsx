@@ -1,34 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom';
 import { IoLogOut } from "react-icons/io5";
 import * as JsSIP from 'jssip'
 import './App.css'
 
 import useAuth from './hooks/useAuth';
 import LoadingComponent from './components/Loading';
-import { useUserInfoStore, useUserVoipStore } from './store/useStore';
+import { useUserInfoStore, useUserVoipStore, useUserPageView } from './store/useStore';
 import { getAsteriskUserList } from './utils/callAsteriskBackend';
 
 // Konfigurasi SIP (pindahkan ke sini atau ke file konfigurasi)
-const sipConfig = {
-  uri: 'sip:1001@10.3.132.71',
-  password: '21619283efe1a13cc2a93f4d3445a173',
-  // Auto detect: WSS untuk production HTTPS, WS untuk localhost
-  sockets: [new JsSIP.WebSocketInterface(
-    window.location.protocol === 'https:' 
-      ? 'wss://10.3.132.71:8089/ws'  // Production (Netlify)
-      : 'ws://10.3.132.71:8088/ws'   // Development (localhost)
-  )],
-  realm: 'asterisk',
-  register: true,
-  session_timers: false,
-  pcConfig: {
-    iceServers: [],
-    rtcpMuxPolicy: 'require',
-    bundlePolicy: 'balanced'
-  },
-  user_agent: 'JsSIP-WebRTC-Client/1.0'
-};
 
 const ContactItem = ({ contact, onCall, onChat }) => (
   <div className="contact-item">
@@ -259,7 +239,6 @@ function App() {
   const [targetExtension, setTargetExtension] = useState('');
   const [currentSession, setCurrentSession] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
-  const [activeView, setActiveView] = useState('dashboard');
 
   const remoteAudioRef = useRef(null);
   const jssipUaInstanceRef = useRef(null);
@@ -278,11 +257,14 @@ function App() {
   const [isLogin] = useAuth();
   const {userInfo} = useUserInfoStore();
   const {userVoip} = useUserVoipStore();
+  const {userPageView, setUserPageView} = useUserPageView();
 
   const [showLogout, setShowLogout] = useState(false);
   const logoutRef = useRef(null);
 
   useEffect(() => {
+    if(!userVoip) return;
+
     getAsteriskUserList().then((datas) => {
       const userList = datas.filter((data) => data.resource != userVoip).map((data) => {
         return {
@@ -294,7 +276,7 @@ function App() {
 
       setContacts(userList)
     })
-  }, [])
+  }, [userVoip])
 
   // Call history tracking
   const [callHistory, setCallHistory] = useState([
@@ -386,7 +368,7 @@ function App() {
       name: contact.name,
       uri: partnerUri
     });
-    setActiveView('chat');
+    setUserPageView('chat');
     // Clear previous messages when switching chat partner (optional)
     // setChatMessages([]);
   };
@@ -523,7 +505,7 @@ function App() {
         //   confirmed: (e) => { console.log('Outgoing call confirmed.'); }
         // }
       };
-      setActiveView('dashboard');
+      setUserPageView('dashboard');
       try {
         // The 'newRTCSession' event on the UA will handle setting this new session
         // as the currentSession for outgoing calls.
@@ -658,10 +640,9 @@ function App() {
     }
 
     // Use extension number as sender ID for consistent matching with incoming messages
-    const myExtension = sipConfig.uri.match(/sip:(.*?)@/)[1];
     const newMessage = { 
       id: Date.now(), 
-      sender: myExtension, 
+      sender: `${userInfo.sub}`, 
       text: textToSend,
       timestamp: new Date() 
     };
@@ -722,6 +703,28 @@ function App() {
 
   // JsSIP initialization useEffect tetap sama
   useEffect(() => {
+    if (!userVoip || !userInfo?.sub) return;
+
+    const sipConfig = {
+      uri: `sip:${userVoip}@10.3.132.71`,
+      password: `${userInfo.sub}`,
+      // Auto detect: WSS untuk production HTTPS, WS untuk localhost
+      sockets: [new JsSIP.WebSocketInterface(
+        window.location.protocol === 'https:' 
+          ? 'wss://asterisk.portal-saras.com/ws'  // Production (Netlify)
+          : 'wss://asterisk.portal-saras.com/ws'   // Development (localhost)
+      )],
+      realm: 'asterisk',
+      register: true,
+      session_timers: false,
+      pcConfig: {
+        iceServers: [],
+        rtcpMuxPolicy: 'require',
+        bundlePolicy: 'balanced'
+      },
+      user_agent: 'JsSIP-WebRTC-Client/1.0'
+    };
+
     JsSIP.debug.enable('JsSIP:*');
     const uaInit = new JsSIP.UA(sipConfig);
     jssipUaInstanceRef.current = uaInit;
@@ -826,9 +829,9 @@ function App() {
           if (matchingContact) {
             handleSelectChatPartner(matchingContact);
             // If we're not on the chat view, show a notification
-            if (activeView !== 'chat') {
+            if (userPageView !== 'chat') {
               // Auto-switch to chat view to show the new message
-              setActiveView('chat');
+              setUserPageView('chat');
             }
           } else {
             // If the sender is not in our contacts, create a temporary contact
@@ -839,7 +842,7 @@ function App() {
             };
             handleSelectChatPartner(tempContact);
             // Auto-switch to chat view
-            setActiveView('chat');
+            setUserPageView('chat');
           }
         }
       } else {
@@ -1110,7 +1113,7 @@ function App() {
       console.log('UA stopped. Session cleanup relies on session ended/failed events triggered by ua.stop().');
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [userVoip, userInfo]);
 
   const handleClickOutside = event => {
     if (logoutRef.current && !logoutRef.current.contains(event.target)) {
@@ -1151,43 +1154,43 @@ function App() {
         
         <nav className="sidebar-nav">
           <div 
-            className={`nav-item ${activeView === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveView('dashboard')}
+            className={`nav-item ${userPageView === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setUserPageView('dashboard')}
           >
             <span className="nav-icon">📊</span>
             <span className="nav-text">Dashboard</span>
           </div>
           <div 
-            className={`nav-item ${activeView === 'dialpad' ? 'active' : ''}`}
-            onClick={() => setActiveView('dialpad')}
+            className={`nav-item ${userPageView === 'dialpad' ? 'active' : ''}`}
+            onClick={() => setUserPageView('dialpad')}
           >
             <span className="nav-icon">📞</span>
             <span className="nav-text">Dial Pad</span>
           </div>
           <div 
-            className={`nav-item ${activeView === 'contacts' ? 'active' : ''}`}
-            onClick={() => setActiveView('contacts')}
+            className={`nav-item ${userPageView === 'contacts' ? 'active' : ''}`}
+            onClick={() => setUserPageView('contacts')}
           >
             <span className="nav-icon">👥</span>
             <span className="nav-text">Contacts</span>
           </div>
           <div 
-            className={`nav-item ${activeView === 'history' ? 'active' : ''}`}
-            onClick={() => setActiveView('history')}
+            className={`nav-item ${userPageView === 'history' ? 'active' : ''}`}
+            onClick={() => setUserPageView('history')}
           >
             <span className="nav-icon">📋</span>
             <span className="nav-text">Call History</span>
           </div>
           <div 
-            className={`nav-item ${activeView === 'chat' ? 'active' : ''}`}
-            onClick={() => setActiveView('chat')}
+            className={`nav-item ${userPageView === 'chat' ? 'active' : ''}`}
+            onClick={() => setUserPageView('chat')}
           >
             <span className="nav-icon">💬</span>
             <span className="nav-text">Chat</span>
           </div>
           <div 
-            className={`nav-item ${activeView === 'settings' ? 'active' : ''}`}
-            onClick={() => setActiveView('settings')}
+            className={`nav-item ${userPageView === 'settings' ? 'active' : ''}`}
+            onClick={() => setUserPageView('settings')}
           >
             <span className="nav-icon">⚙️</span>
             <span className="nav-text">Settings</span>
@@ -1208,7 +1211,7 @@ function App() {
       {/* Main Content */}
       <div className="main-container">
         <header className="main-header">
-          <h1>{activeView.charAt(0).toUpperCase() + activeView.slice(1)}</h1>
+          <h1>{userPageView.charAt(0).toUpperCase() + userPageView.slice(1)}</h1>
           <div className="user-profile relative hover:cursor-pointer" onClick={() => setShowLogout(prev => !prev)}>
             <span className="notification-badge">2</span>
             <div className="user-avatar">{ `${userInfo?.given_name.charAt(0).toUpperCase()}${userInfo?.family_name.charAt(0).toUpperCase()}` }</div>
@@ -1227,7 +1230,7 @@ function App() {
         </header>
 
         <div className="main-content">
-          {activeView === 'dashboard' && (
+          {userPageView === 'dashboard' && (
             <div className="dashboard-view">
               <DashboardStats 
                 totalCalls={dashboardStats.totalCalls}
@@ -1263,7 +1266,7 @@ function App() {
             </div>
           )}
 
-          {activeView === 'dialpad' && (
+          {userPageView === 'dialpad' && (
             <div className="dialpad-view">
               <div className="dial-card">
                 <input
@@ -1280,7 +1283,7 @@ function App() {
             </div>
           )}
 
-          {activeView === 'contacts' && (
+          {userPageView === 'contacts' && (
             <div className="contacts-view">
               <div className="contacts-list">
                 {contacts.map(contact => (
@@ -1306,7 +1309,7 @@ function App() {
             </div>
           )}
 
-          {activeView === 'chat' && (
+          {userPageView === 'chat' && (
             <div className="chat-view">
               {chatPartner ? (
                 <div className="chat-container">
@@ -1317,7 +1320,7 @@ function App() {
                     {chatMessages.map(msg => {
                       // Only show messages from current chat partner or sent to them
                       const isFromCurrentPartner = msg.sender === chatPartner.id;
-                      const isSentByMe = msg.sender.startsWith('Saya') || msg.sender === sipConfig.uri.match(/sip:(.*?)@/)[1];
+                      const isSentByMe = msg.sender.startsWith('Saya') || msg.sender === userVoip;
                       
                       // If system message, or message from/to current partner, show it
                       if (msg.sender === 'System' || isFromCurrentPartner || isSentByMe) {
@@ -1364,7 +1367,7 @@ function App() {
             </div>
           )}
 
-          {activeView === 'history' && (
+          {userPageView === 'history' && (
             <div className="history-view">
               <div className="history-header">
                 <h3>Call History</h3>
@@ -1440,13 +1443,13 @@ function App() {
             </div>
           )}
 
-          {activeView === 'settings' && (
+          {userPageView === 'settings' && (
             <div className="settings-view">
               <div className="settings-card">
                 <h3>SIP Settings</h3>
                 <p>Status: {sipStatusText}</p>
                 <p>Extension: { userVoip }</p>
-                <p>Server: 10.3.132.71:8089 (WSS)</p>
+                <p>Server: asterisk.portal-saras.com (WSS)</p>
               </div>
             </div>
           )}

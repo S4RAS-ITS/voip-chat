@@ -14,3 +14,11 @@ export const useUserVoipStore = create((set) => ({
   userVoip: null,
   setUserVoip: (val) => set({ userVoip: val }),
 }));
+
+export const useUserPageView = create((set) => ({
+  userPageView: sessionStorage.getItem('current_page') ?? 'dashboard',
+  setUserPageView: (val) => {
+    set({ userPageView: val });
+    sessionStorage.setItem('current_page', val)
+  },
+}));

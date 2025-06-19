@@ -1213,7 +1213,6 @@ function App() {
         <header className="main-header">
           <h1>{userPageView.charAt(0).toUpperCase() + userPageView.slice(1)}</h1>
           <div className="user-profile relative hover:cursor-pointer" onClick={() => setShowLogout(prev => !prev)}>
-            <span className="notification-badge"></span>
             <div className="user-avatar">{ `${userInfo?.given_name.charAt(0).toUpperCase()}${userInfo?.family_name.charAt(0).toUpperCase()}` }</div>
             <span className="user-name">{ `${userInfo?.given_name} ${userInfo?.family_name}` }</span>
             {
